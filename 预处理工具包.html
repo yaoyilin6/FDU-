@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本转码+合并 · ANSI→UTF‑8 ➔ 每篇一行</title>
+    <!-- JSZip 用于打包下载 (保留) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+        }
+        body {
+            background: linear-gradient(145deg, #f6f9fc 0%, #e6f0f5 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+        }
+        .card {
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 2.5rem;
+            box-shadow: 0 25px 45px -10px rgba(0,30,50,0.3), inset 0 1px 2px rgba(255,255,255,0.6);
+            padding: 2rem 2rem 2.5rem;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            color: #0b2b3d;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.3rem;
+            letter-spacing: -0.02em;
+            flex-wrap: wrap;
+        }
+        h1 span {
+            background: #1b5e7a;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.2rem 1rem;
+            border-radius: 40px;
+            margin-left: 0.75rem;
+            backdrop-filter: blur(4px);
+            background: rgba(20, 100, 140, 0.8);
+        }
+        .sub {
+            color: #1e4a62;
+            margin-bottom: 1.2rem;
+            font-size: 1rem;
+            border-left: 4px solid #3a9bd5;
+            padding-left: 1.2rem;
+            background: rgba(58, 155, 213, 0.06);
+            border-radius: 0 8px 8px 0;
+        }
+        .step-hint {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            background: #dff0fa;
+            border-radius: 3rem;
+            padding: 0.7rem 1.8rem;
+            margin-bottom: 1.5rem;
+            color: #07405a;
+            font-weight: 500;
+            border: 1px solid #b1d2ea;
+        }
+        .step-hint .step {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .step-hint .step .badge-step {
+            background: #1d7cb0;
+            color: white;
+            width: 1.8rem;
+            height: 1.8rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: 700;
+        }
+        .upload-area {
+            background: rgba(255,255,255,0.5);
+            border-radius: 2rem;
+            padding: 1.8rem 1.5rem;
+            border: 2px dashed #7bb8d9;
+            text-align: center;
+            margin-bottom: 1.8rem;
+            transition: background 0.2s, border-color 0.2s;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            background: rgba(255,255,255,0.75);
+            border-color: #2a7faa;
+        }
+        .upload-area label {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+            color: #0e3b4f;
+        }
+        .upload-icon {
+            font-size: 3rem;
+            filter: drop-shadow(2px 4px 4px rgba(0,40,60,0.2));
+        }
+        .file-info {
+            font-size: 0.9rem;
+            color: #1c5a74;
+            background: #d9eaf3;
+            padding: 0.3rem 1.2rem;
+            border-radius: 30px;
+            margin-top: 0.5rem;
+            display: inline-block;
+        }
+        #fileInput {
+            display: none;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin: 1.5rem 0 1.2rem;
+            gap: 0.8rem;
+        }
+        .file-count {
+            background: #d1e2ed;
+            border-radius: 40px;
+            padding: 0.4rem 1.2rem;
+            font-weight: 500;
+            color: #103d53;
+            white-space: nowrap;
+        }
+        .btn-group {
+            display: flex;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+        }
+        button {
+            background: white;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #103d53;
+            border: 1px solid rgba(60, 130, 180, 0.4);
+            box-shadow: 0 6px 12px -8px rgba(0,60,90,0.3);
+            cursor: pointer;
+            transition: 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            backdrop-filter: blur(4px);
+            background: rgba(255, 255, 255, 0.7);
+        }
+        button:enabled:hover {
+            background: #ecf5fa;
+            border-color: #2f8dc0;
+            box-shadow: 0 10px 18px -8px #1f6d94;
+            transform: scale(1.02);
+        }
+        button:enabled:active {
+            transform: scale(0.98);
+            background: #d0e3f0;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.4);
+        }
+        .primary-btn {
+            background: #1c6c96;
+            border-color: #0c4a6c;
+            color: white;
+            box-shadow: 0 8px 16px -6px #145a7a;
+        }
+        .primary-btn:enabled {
+            background: #1d7cb0;
+        }
+        .merge-btn {
+            background: #3f829a;
+            border-color: #1c5c74;
+            color: white;
+        }
+        .merge-btn:enabled {
+            background: #479bb8;
+        }
+        .file-table {
+            background: rgba(255,255,255,0.5);
+            border-radius: 1.8rem;
+            padding: 0.2rem 0.2rem 0.2rem 1rem;
+            backdrop-filter: blur(4px);
+            max-height: 350px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #98c1da #e1f0f8;
+            border: 1px solid #c5ddee;
+        }
+        .file-table::-webkit-scrollbar {
+            width: 8px;
+        }
+        .file-table::-webkit-scrollbar-track {
+            background: #e1f0f8;
+            border-radius: 20px;
+        }
+        .file-table::-webkit-scrollbar-thumb {
+            background: #98c1da;
+            border-radius: 20px;
+        }
+        .file-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.8rem 1rem 0.8rem 0.5rem;
+            border-bottom: 1px solid rgba(150, 190, 220, 0.4);
+        }
+        .file-row:last-child {
+            border-bottom: none;
+        }
+        .file-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+        }
+        .file-name {
+            font-weight: 550;
+            color: #0b3f55;
+            max-width: 280px;
+            word-break: break-word;
+        }
+        .file-size {
+            color: #2e6a8a;
+            background: #d9ebf5;
+            padding: 0.2rem 1rem;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .file-status {
+            min-width: 95px;
+            text-align: right;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            justify-content: flex-end;
+        }
+        .badge {
+            background: #c5dff0;
+            color: #103d53;
+            padding: 0.25rem 1rem;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge.success {
+            background: #b6e3b6;
+            color: #0b4f2c;
+        }
+        .badge.error {
+            background: #ffd9d4;
+            color: #ad2a1a;
+        }
+        .dl-link {
+            background: #f0f7fe;
+            border-radius: 30px;
+            padding: 0.3rem 0.9rem;
+            font-size: 0.8rem;
+            color: #0d577b;
+            text-decoration: none;
+            font-weight: 600;
+            border: 1px solid #5fa3cc;
+            transition: 0.1s;
+            white-space: nowrap;
+        }
+        .dl-link:hover {
+            background: #daeefc;
+            border-color: #2679a8;
+            color: #022c3f;
+        }
+        .footer-note {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #2b6b8a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
+        }
+        .reset-btn {
+            background: none;
+            border: 1px solid #9bbdd2;
+            padding: 0.2rem 1.2rem;
+            box-shadow: none;
+        }
+        .merge-rule {
+            background: #e9f2f8;
+            border-radius: 30px;
+            padding: 0.2rem 1.2rem;
+            color: #04587a;
+        }
+        .Bicon {
+            width: 80px;
+            height: 80px;
+        }
+    </style>
+</head>
+<body>
+<div class="card" id="app">
+    <h1>
+        📄 转码 · 合并 工作流
+        <span>ANSI → UTF‑8 ➔ 每篇一行</span>
+    </h1>
+    <div class="step-hint">
+        <span class="step"><span class="badge-step">1</span> 上传ANSI文本，点击转码为UTF‑8</span>
+        <span class="step"><span class="badge-step">2</span> 合并所有转码文件 → 每篇一行 + 空行分隔</span>
+    </div>
+
+    <!-- 上传区 -->
+    <div class="upload-area" id="dropZone">
+        <label for="fileInput">
+            <span class="upload-icon">📂</span>
+            <span style="font-size: 1.2rem;">点击或拖拽文件到此</span>
+            <span style="font-size: 0.9rem;">支持 .txt / .csv / .log 等文本文件 (ANSI编码)</span>
+        </label>
+        <input type="file" id="fileInput" multiple accept=".txt,.csv,.log,.ini,.bat,.srt,.html,.htm,.xml,.json,text/plain" />
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <div class="file-count" id="fileCount">未选择文件</div>
+        <div class="btn-group">
+            <button id="convertBtn" disabled>🔁 ① 转码 (ANSI→UTF-8)</button>
+            <button id="mergeBtn" class="merge-btn" disabled>📋 ② 合并为单文件 (每篇一行)</button>
+            <button id="zipBtn" disabled>📦 打包下载全部 (ZIP)</button>
+            <button id="resetBtn" class="reset-btn">🗑️ 清空列表</button>
+        </div>
+    </div>
+
+    <!-- 文件列表 -->
+    <div class="file-table" id="fileListContainer">
+        <div style="padding: 1.8rem; text-align: center; color: #5885a3;" id="emptyPlaceholder">✨ 选择文件后会显示在这里</div>
+    </div>
+
+    <!-- 底部状态与说明 -->
+    <div class="footer-note">
+        <span>⭐ 转码后文件名添加 _utf8 后缀；合并规则：每个文件变为<strong>连续一行</strong>，篇间<strong>空一行</strong></span>
+        <span id="globalStatus" class="merge-rule"></span>
+        <span>Copyright<a href="https://atny.top" target="_blank"><img src="https://blog.atny.top/favicon.ico" class="Bicon"></a></span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const fileCountSpan = document.getElementById('fileCount');
+        const convertBtn = document.getElementById('convertBtn');
+        const mergeBtn = document.getElementById('mergeBtn');
+        const zipBtn = document.getElementById('zipBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const fileListContainer = document.getElementById('fileListContainer');
+        const globalStatus = document.getElementById('globalStatus');
+
+        // 数据存储
+        let filesData = [];               // { file, name, size, status, content, blobUrl, error }
+        let isConverting = false;          // 防止重复转码
+
+        // 辅助: 格式化大小
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        // 清理所有 blob URL
+        function revokeAllBlobs() {
+            filesData.forEach(item => {
+                if (item.blobUrl) {
+                    URL.revokeObjectURL(item.blobUrl);
+                    item.blobUrl = null;
+                }
+            });
+        }
+
+        // 生成带 _utf8 的文件名
+        function getUtf8Filename(originalName) {
+            const lastDotIndex = originalName.lastIndexOf('.');
+            if (lastDotIndex === -1) return originalName + '_utf8';
+            const namePart = originalName.substring(0, lastDotIndex);
+            const extPart = originalName.substring(lastDotIndex);
+            return namePart + '_utf8' + extPart;
+        }
+
+        // 渲染文件列表
+        function renderFileList() {
+            if (!filesData.length) {
+                fileListContainer.innerHTML = `<div style="padding: 1.8rem; text-align: center; color: #5885a3;">📭 暂无文件，请点击上方区域添加</div>`;
+                fileCountSpan.innerText = '未选择文件';
+            } else {
+                let html = '';
+                filesData.forEach((item, index) => {
+                    const fileName = escapeHtml(item.name);  // 简单防XSS
+                    const fileSize = formatSize(item.size);
+                    const status = item.status || 'pending';
+                    let statusBadge = '';
+                    let downloadLink = '';
+
+                    if (status === 'pending') {
+                        statusBadge = `<span class="badge">⏳ 等待</span>`;
+                    } else if (status === 'processing') {
+                        statusBadge = `<span class="badge">⚙️ 转码中</span>`;
+                    } else if (status === 'done') {
+                        statusBadge = `<span class="badge success">✅ 完成</span>`;
+                        if (item.blobUrl) {
+                            const utf8Name = getUtf8Filename(item.name);
+                            downloadLink = `<a href="${item.blobUrl}" download="${utf8Name}" class="dl-link" title="下载单个文件">📥 下载</a>`;
+                        }
+                    } else if (status === 'error') {
+                        statusBadge = `<span class="badge error">❌ 失败</span>`;
+                    }
+
+                    html += `
+                        <div class="file-row" data-index="${index}">
+                            <div class="file-meta">
+                                <span class="file-name" title="${fileName}">${fileName}</span>
+                                <span class="file-size">${fileSize}</span>
+                            </div>
+                            <div class="file-status">
+                                ${statusBadge}
+                                ${downloadLink}
+                            </div>
+                        </div>
+                    `;
+                });
+                fileListContainer.innerHTML = html;
+                fileCountSpan.innerText = `${filesData.length} 个文件`;
+            }
+
+            // 更新按钮状态
+            const hasFiles = filesData.length > 0;
+            const hasDone = filesData.some(f => f.status === 'done');
+            convertBtn.disabled = isConverting || !hasFiles;
+            zipBtn.disabled = !hasDone || isConverting;
+            mergeBtn.disabled = !hasDone || isConverting;   // 有成功文件且不在转码中才可合并
+        }
+
+        // 简单的转义（防止文件名XSS）
+        function escapeHtml(unsafe) {
+            return unsafe.replace(/[&<>"]/g, function(m) {
+                if(m === '&') return '&amp;';
+                if(m === '<') return '&lt;';
+                if(m === '>') return '&gt;';
+                if(m === '"') return '&quot;';
+                return m;
+            });
+        }
+
+        // 重置 / 清空
+        function resetAll() {
+            if (isConverting) return;
+            revokeAllBlobs();
+            filesData = [];
+            fileInput.value = '';
+            renderFileList();
+            globalStatus.innerText = '';
+        }
+
+        // 使用 GB18030 解码 (兼容ANSI)
+        function readFileAsTextGB18030(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const decoder = new TextDecoder('gb18030', { fatal: false, ignoreBOM: true });
+                        const text = decoder.decode(e.target.result);
+                        resolve(text);
+                    } catch (err) {
+                        reject(new Error('解码失败：' + err.message));
+                    }
+                };
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // 处理单个文件转码
+        async function processFile(item, index) {
+            item.status = 'processing';
+            item.content = null;
+            if (item.blobUrl) {
+                URL.revokeObjectURL(item.blobUrl);
+                item.blobUrl = null;
+            }
+            renderFileList();
+
+            try {
+                const text = await readFileAsTextGB18030(item.file);
+                const utf8Blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(utf8Blob);
+
+                item.content = text;          // 缓存文本
+                item.blobUrl = url;
+                item.status = 'done';
+                item.error = null;
+            } catch (err) {
+                item.status = 'error';
+                item.error = err.message;
+                item.content = null;
+                if (item.blobUrl) {
+                    URL.revokeObjectURL(item.blobUrl);
+                    item.blobUrl = null;
+                }
+            }
+            renderFileList();
+        }
+
+        // 批量转码
+        async function startConversion() {
+            if (isConverting || !filesData.length) return;
+
+            isConverting = true;
+            convertBtn.disabled = true;
+            zipBtn.disabled = true;
+            mergeBtn.disabled = true;
+            globalStatus.innerText = '⏳ 转码进行中……';
+
+            for (let i = 0; i < filesData.length; i++) {
+                const item = filesData[i];
+                if (item.status === 'done' || item.status === 'error') continue;
+                await processFile(item, i);
+            }
+
+            isConverting = false;
+            const hasDone = filesData.some(f => f.status === 'done');
+            convertBtn.disabled = false;
+            zipBtn.disabled = !hasDone;
+            mergeBtn.disabled = !hasDone;
+            globalStatus.innerText = hasDone ? '✅ 转码完成，可合并或打包' : '转码完成，但无成功文件';
+        }
+
+        // 打包所有成功文件为 ZIP
+        async function downloadAllAsZip() {
+            if (isConverting) return;
+            const doneItems = filesData.filter(f => f.status === 'done' && f.content !== null);
+            if (doneItems.length === 0) {
+                alert('没有已转码成功的文件');
+                return;
+            }
+
+            globalStatus.innerText = '📦 正在生成 ZIP ...';
+            const zip = new JSZip();
+
+            doneItems.forEach(item => {
+                const utf8Name = getUtf8Filename(item.name);
+                zip.file(utf8Name, item.content);
+            });
+
+            try {
+                const blob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `converted_${new Date().toISOString().slice(0,10)}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                globalStatus.innerText = 'ZIP 下载完成';
+            } catch (e) {
+                globalStatus.innerText = 'ZIP 生成失败';
+                console.error(e);
+            }
+        }
+
+        // ---------- 新增合并功能 (每篇一行 + 空行) ----------
+        function mergeAllToSingle() {
+            if (isConverting) return;
+            const doneItems = filesData.filter(f => f.status === 'done' && f.content !== null);
+            if (doneItems.length === 0) {
+                alert('没有已转码成功的文件可供合并');
+                return;
+            }
+
+            globalStatus.innerText = '📋 正在合并为单文件...';
+
+            // 每个文件内容去掉所有换行 → 连续一行
+            const lines = doneItems.map(item => {
+                // 注意：item.content 是解码后的 JS 字符串
+                return item.content.replace(/[\r\n]+/g, '');
+            });
+
+            // 用两个换行符连接 (即篇间空一行)
+            const mergedText = lines.join('\n\n');
+
+            // 生成下载
+            const blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const dateStr = new Date().toISOString().slice(0,10);
+            a.download = `merged_${dateStr}.txt`;   // 合并文件名
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            globalStatus.innerText = '✅ 合并文件下载完成 (每篇一行，空行分隔)';
+        }
+
+        // 处理选择的文件
+        function handleFiles(selectedFiles) {
+            if (isConverting) {
+                alert('请等待当前转码完成');
+                return;
+            }
+            revokeAllBlobs();
+
+            const newFilesData = [];
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                newFilesData.push({
+                    file: file,
+                    name: file.name,
+                    size: file.size,
+                    status: 'pending',
+                    content: null,
+                    blobUrl: null,
+                    error: null
+                });
+            }
+            filesData = newFilesData;
+            renderFileList();
+        }
+
+        // 事件绑定
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.background = 'rgba(255,255,255,0.8)';
+            dropZone.style.borderColor = '#2a7faa';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.background = '';
+            dropZone.style.borderColor = '#7bb8d9';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.background = '';
+            dropZone.style.borderColor = '#7bb8d9';
+            if (e.dataTransfer.files.length) {
+                handleFiles(e.dataTransfer.files);
+                // 清空 input 的 files 以便再次选择相同文件 (可选)
+                fileInput.value = '';
+            }
+        });
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        convertBtn.addEventListener('click', startConversion);
+        zipBtn.addEventListener('click', downloadAllAsZip);
+        mergeBtn.addEventListener('click', mergeAllToSingle);
+        resetBtn.addEventListener('click', resetAll);
+
+        // 初始渲染
+        renderFileList();
+    })();
+</script>
+</body>
+</html>
